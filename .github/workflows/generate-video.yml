@@ -30,9 +30,9 @@ jobs:
             --host "${{ inputs.host }}" \
             --prompt "${{ inputs.prompt }}" \
             --negative "${{ inputs.negative }}" \
-            --out comfy_video.mp4
+            --out comfy_video
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: comfy_video
-          path: comfy_video.mp4
+          path: comfy_video_*.mp4
