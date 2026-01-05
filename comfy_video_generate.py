@@ -121,10 +121,12 @@ def download_file(url, output_path):
         f.write(resp.read())
 
 
-def build_prompt(prompt_text, negative_text):
+def build_prompt(prompt_text, negative_text, seed, filename_prefix):
     workflow = json.loads(json.dumps(WORKFLOW_TEMPLATE))
     workflow["44"]["inputs"]["text"] = prompt_text
     workflow["93"]["inputs"]["text"] = negative_text
+    workflow["129"]["inputs"]["noise_seed"] = seed
+    workflow["102"]["inputs"]["filename_prefix"] = filename_prefix
     return {"prompt": workflow}
 
 
@@ -143,42 +145,51 @@ def main():
     parser.add_argument("--host", default="http://192.168.1.3:8188", help="ComfyUI base URL")
     parser.add_argument("--prompt", required=True, help="Positive prompt text")
     parser.add_argument("--negative", default="", help="Negative prompt text")
-    parser.add_argument("--out", default="comfy_video.mp4", help="Output file path")
+    parser.add_argument("--out", default="comfy_video", help="Output file prefix (without index/extension)")
     parser.add_argument("--timeout", type=int, default=1800, help="Timeout seconds")
     parser.add_argument("--poll", type=int, default=5, help="Poll interval seconds")
+    parser.add_argument("--count", type=int, default=5, help="Number of videos to generate")
+    parser.add_argument("--seed", type=int, default=None, help="Base seed (incremented per video)")
     args = parser.parse_args()
 
-    payload = build_prompt(args.prompt, args.negative)
-    prompt_resp = http_json(f"{args.host}/prompt", method="POST", data=payload)
-    prompt_id = prompt_resp.get("prompt_id")
-    if not prompt_id:
-        print(f"Failed to start prompt: {prompt_resp}", file=sys.stderr)
-        return 1
+    base_seed = args.seed if args.seed is not None else int(time.time())
+    for index in range(1, args.count + 1):
+        seed = base_seed + index - 1
+        filename_prefix = f"video/hunyuan_video_1.5_{seed}"
+        payload = build_prompt(args.prompt, args.negative, seed, filename_prefix)
+        prompt_resp = http_json(f"{args.host}/prompt", method="POST", data=payload)
+        prompt_id = prompt_resp.get("prompt_id")
+        if not prompt_id:
+            print(f"Failed to start prompt: {prompt_resp}", file=sys.stderr)
+            return 1
 
-    deadline = time.monotonic() + args.timeout
-    while time.monotonic() < deadline:
-        history = http_json(f"{args.host}/history/{prompt_id}")
-        entry = history.get(prompt_id)
-        if entry and entry.get("status", {}).get("completed"):
-            video_info = find_video_info(entry)
-            if not video_info:
-                print("Completed but no video info found in outputs.", file=sys.stderr)
-                return 2
-            query = urllib.parse.urlencode(
-                {
-                    "filename": video_info.get("filename", ""),
-                    "subfolder": video_info.get("subfolder", ""),
-                    "type": video_info.get("type", "output"),
-                }
-            )
-            download_url = f"{args.host}/view?{query}"
-            download_file(download_url, args.out)
-            print(args.out)
-            return 0
-        time.sleep(args.poll)
+        deadline = time.monotonic() + args.timeout
+        while time.monotonic() < deadline:
+            history = http_json(f"{args.host}/history/{prompt_id}")
+            entry = history.get(prompt_id)
+            if entry and entry.get("status", {}).get("completed"):
+                video_info = find_video_info(entry)
+                if not video_info:
+                    print("Completed but no video info found in outputs.", file=sys.stderr)
+                    return 2
+                query = urllib.parse.urlencode(
+                    {
+                        "filename": video_info.get("filename", ""),
+                        "subfolder": video_info.get("subfolder", ""),
+                        "type": video_info.get("type", "output"),
+                    }
+                )
+                download_url = f"{args.host}/view?{query}"
+                output_path = f"{args.out}_{index}.mp4"
+                download_file(download_url, output_path)
+                print(output_path)
+                break
+            time.sleep(args.poll)
+        else:
+            print("Timed out waiting for video generation.", file=sys.stderr)
+            return 3
 
-    print("Timed out waiting for video generation.", file=sys.stderr)
-    return 3
+    return 0
 
 
 if __name__ == "__main__":
