@@ -25,7 +25,7 @@ on:
       timeout:
         description: "Timeout seconds per video"
         required: false
-        default: "1800"
+        default: "3600"
         type: string
 
 jobs:
