@@ -146,7 +146,7 @@ def main():
     parser.add_argument("--prompt", required=True, help="Positive prompt text")
     parser.add_argument("--negative", default="", help="Negative prompt text")
     parser.add_argument("--out", default="comfy_video", help="Output file prefix (without index/extension)")
-    parser.add_argument("--timeout", type=int, default=3600, help="Timeout seconds")
+    parser.add_argument("--timeout", type=int, default=21600, help="Timeout seconds")
     parser.add_argument("--poll", type=int, default=5, help="Poll interval seconds")
     parser.add_argument("--count", type=int, default=5, help="Number of videos to generate")
     parser.add_argument("--seed", type=int, default=None, help="Base seed (incremented per video)")
